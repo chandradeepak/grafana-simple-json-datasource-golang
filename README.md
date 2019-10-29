@@ -16,3 +16,4 @@ $ go get github.com/chandradeepak/grafana-simple-json-datasource-golang
 $ grafana-simple-json-datasource-golang
 ```
 
+![Grafana Table](grafanatable.png)
