@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 type server struct {
@@ -12,6 +16,79 @@ type server struct {
 func NewSever() (*server, error) {
 	s := &server{}
 	return s, nil
+}
+
+type searchResponse []string
+
+type queryRequest struct {
+	Range struct {
+		From time.Time `json:"from"`
+		To   time.Time `json:"to"`
+	} `json:"range"`
+	Interval string `json:"interval"`
+	Targets  []struct {
+		RefID  string `json:"refId"`
+		Target string `json:"target"`
+	} `json:"targets"`
+	Format        string `json:"format"`
+	MaxDataPoints int    `json:"maxDataPoints"`
+}
+
+type queryTimeSeriesResponse []struct {
+	Target     string          `json:"target"`
+	Datapoints [][]interface{} `json:"datapoints"`
+}
+
+// TableResponseColumn ...
+type TableResponseColumn struct {
+	Text string `json:"text"`
+	Type string `json:"type,omitempty"`
+	Sort bool   `json:"sort,omitempty"`
+	Desc bool   `json:"desc,omitempty"`
+}
+
+// QueryTableResponse ...
+type QueryTableResponse []struct {
+	Columns []TableResponseColumn `json:"columns"`
+	Rows    [][]string            `json:"rows"`
+	Type    string                `json:"type"`
+}
+
+// AnnotationRqt ...
+type AnnotationRqt struct {
+	Datasource string `json:"datasource"`
+	Enable     bool   `json:"enable"`
+	Name       string `json:"name"`
+}
+
+// AnnotationRequest ...
+type AnnotationRequest struct {
+	Range struct {
+		From time.Time `json:"from"`
+		To   time.Time `json:"to"`
+	} `json:"range"`
+	RangeRaw struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"rangeRaw"`
+	Annotation AnnotationRqt `json:"annotation"`
+	Dashboard  string        `json:"dashboard"`
+}
+
+// AnnotationRsp ...
+type AnnotationRsp struct {
+	Name       string `json:"name"`
+	Enabled    bool   `json:"enabled"`
+	Datasource string `json:"datasource"`
+}
+
+// AnnotationResponse ...
+type AnnotationResponse []struct {
+	Annotation AnnotationRsp `json:"annotation"`
+	Title      string        `json:"title"`
+	Time       int64         `json:"time"`
+	Text       string        `json:"text"`
+	Tags       []string      `json:"tags"`
 }
 
 func (s *server) handle(w http.ResponseWriter, r *http.Request) {
@@ -62,8 +139,41 @@ func (s *server) search(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) query(w http.ResponseWriter, r *http.Request) {
 
-	log.Println(r.URL)
-	log.Println(r.Body)
+	decoder := json.NewDecoder(r.Body)
+	var qR queryRequest
+	err := decoder.Decode(&qR)
+	if err != nil {
+		log.Println("error decoding query", err)
+	}
+	log.Printf("printing the query request%+v", qR)
+
+	qRsp := make(QueryTableResponse, 1)
+	qRsp[0].Columns = append(qRsp[0].Columns, TableResponseColumn{Text: "column1"})
+	qRsp[0].Columns = append(qRsp[0].Columns, TableResponseColumn{Text: "column2"})
+	qRsp[0].Columns = append(qRsp[0].Columns, TableResponseColumn{Text: "column3"})
+
+	for i := 0; i < 10; i++ {
+		dataRows := make([]string, 3)
+		for j := range dataRows {
+			dataRows[j] = strconv.Itoa(i * j)
+		}
+		qRsp[0].Rows = append(qRsp[0].Rows, dataRows)
+	}
+	qRsp[0].Type = "table"
+
+	rsp, _ := json.Marshal(qRsp)
+	//	log.Printf("printing the query response%+v", qRsp)
+
+	var prettyJSON bytes.Buffer
+	error := json.Indent(&prettyJSON, rsp, "", "\t")
+	if error != nil {
+		log.Println("JSON parse error: ", error)
+		return
+	}
+	log.Println("printing the query response:", string(prettyJSON.Bytes()))
+	w.Write(rsp)
+
+	w.WriteHeader(http.StatusOK)
 
 }
 
